@@ -1,0 +1,32 @@
+# python venv
+venv/
+env/
+ENV/
+
+# python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# dist / packaging
+dist/
+build/
+*.egg-info/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# env variables
+.env
+.env.local
+
+# logs
+*.log
+
+# test coverage
+.coverage
+htmlcov/
