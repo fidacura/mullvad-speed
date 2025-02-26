@@ -1,4 +1,4 @@
-# mullvad-scout
+# mullvad-speed
 
 A CLI tool to find the best Mullvad VPN servers for your location
 
