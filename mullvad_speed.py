@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import requests                             # for making http requests to mullvad api
 import socket                               # for testing connection times
 import sys                                  # for system stuff like exit
@@ -11,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed  # for running t
 
 class MullvadSpeedTest:
     def __init__(self):
-        # mullvad's api endpoint for getting server info
+        # mullvad's api endpoint
         self.api_url = "https://api.mullvad.net/www/relays/all/"
         # initialize rich console for pretty output (colors, tables, etc)
         self.console = Console()
@@ -28,7 +27,7 @@ class MullvadSpeedTest:
             response = requests.get(self.api_url, timeout=5, headers=self.headers)
             response.raise_for_status()  # will raise an error if request fails
             
-            # filter to get only active wireguard servers (they're faster than openvpn)
+            # filter to get only active wireguard servers
             servers = [s for s in response.json() if s['type'] == 'wireguard' and s.get('active', False)]
             self.console.print(f"[green]found {len(servers)} active wireguard servers")
             return servers
@@ -57,7 +56,7 @@ class MullvadSpeedTest:
             # calculate average ping
             avg_ping = sum(pings) / len(pings)
             
-            # return all the useful info about this server
+            # return all the useful info about server
             return {
                 'hostname': hostname,
                 'country': server.get('country_name', server.get('country_code', 'Unknown')),
@@ -74,19 +73,19 @@ class MullvadSpeedTest:
                 'socks_available': bool(server.get('socks_name'))  # has socks proxy?
             }
         except Exception:
-            # if we can't connect or something else goes wrong, skip this server
+            # if we can't connect, skip server
             return None
 
     def test_servers(self, max_results: int = 10) -> List[Dict]:
         """test all servers and return top results based on ping time"""
-        # first get the list of all servers
+        # get the list of all servers
         servers = self.fetch_servers()
         results = []
         
         self.console.print("[yellow]testing server response times...")
         # use threadpoolexecutor to test multiple servers at once (way faster!)
         with ThreadPoolExecutor(max_workers=10) as executor:
-            # start all the tests
+            # start tests
             future_to_server = {executor.submit(self.ping_server, server): server for server in servers}
             completed = 0
             
@@ -109,7 +108,7 @@ class MullvadSpeedTest:
             self.console.print("[red]no valid test results found")
             return
 
-        # create a table with all our columns
+        # create a table with all columns
         table = Table(title="mullvad server speed test results")
         table.add_column("Hostname", style="yellow", no_wrap=True)
         table.add_column("Location", style="cyan")
@@ -139,7 +138,7 @@ class MullvadSpeedTest:
             location = f"{result['city']}, {result['country']}"
             port_speed = f"{result['port_speed']}Gbps" if result['port_speed'] else "Unknown"
             
-            # add the row to our table
+            # add row to table
             table.add_row(
                 result['hostname'],
                 location,
@@ -152,7 +151,7 @@ class MullvadSpeedTest:
 
         # print a newline to clear the progress counter
         self.console.print("\n")
-        # show the table
+        # show table
         self.console.print(table)
         
         # get info about the best server (first one since they're sorted)
@@ -190,6 +189,5 @@ def main():
     results = tester.test_servers(max_results=max_results)
     tester.display_results(results)
 
-# only run if this is the main script (not imported)
 if __name__ == "__main__":
     main()
