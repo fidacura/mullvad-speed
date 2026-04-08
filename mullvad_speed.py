@@ -14,27 +14,19 @@ class MullvadSpeedTest:
         self.api_url = "https://api.mullvad.net/www/relays/all/"
         # initialize rich console for pretty output (colors, tables, etc)
         self.console = Console()
-        # some headers to make our requests look legit
         self.headers = {
             'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            'User-Agent': 'mullvad-speed/1.0'
         }
 
     def fetch_servers(self) -> List[Dict]:
         """fetch all available mullvad servers"""
-        try:
-            # get the server list with a 5 second timeout
-            response = requests.get(self.api_url, timeout=5, headers=self.headers)
-            response.raise_for_status()  # will raise an error if request fails
-            
-            # filter to get only active wireguard servers
-            servers = [s for s in response.json() if s['type'] == 'wireguard' and s.get('active', False)]
-            self.console.print(f"[green]found {len(servers)} active wireguard servers")
-            return servers
-        except Exception as e:
-            # if something goes wrong, show error and quit
-            self.console.print(f"[red]error fetching servers: {str(e)}")
-            sys.exit(1)
+        response = requests.get(self.api_url, timeout=5, headers=self.headers, verify=True)
+        response.raise_for_status()
+
+        servers = [s for s in response.json() if s.get('type') == 'wireguard' and s.get('active', False)]
+        self.console.print(f"[green]found {len(servers)} active wireguard servers")
+        return servers
 
     def ping_server(self, server: Dict) -> Optional[Dict]:
         """measure ping time to a server by trying to connect to it"""
@@ -50,7 +42,8 @@ class MullvadSpeedTest:
             for _ in range(3):
                 start_time = time.time()
                 # try to connect to port 443 (https) with 2 second timeout
-                socket.create_connection((ip, 443), timeout=2)
+                with socket.create_connection((ip, 443), timeout=2):
+                    pass
                 pings.append((time.time() - start_time) * 1000)  # convert to milliseconds
             
             # calculate average ping
@@ -92,8 +85,8 @@ class MullvadSpeedTest:
             # as each test completes, collect its results
             for future in as_completed(future_to_server):
                 completed += 1
-                # show progress (overwrite line with \r)
-                self.console.print(f"progress: {completed}/{len(servers)}", end='\r')
+                # overwrite the same line to show progress without flooding output
+                print(f"\rprogress: {completed}/{len(servers)}   ", end='', flush=True)
                 
                 result = future.result()
                 if result:
@@ -115,6 +108,8 @@ class MullvadSpeedTest:
         table.add_column("IPv4", style="blue", no_wrap=True)
         table.add_column("Ping", justify="right", style="green")
         table.add_column("Speed", justify="right", style="magenta")
+        table.add_column("Load", justify="right", style="yellow")
+        table.add_column("Provider", style="white")
         table.add_column("Owned", justify="center", style="red")
         table.add_column("Features", style="cyan")
 
@@ -139,18 +134,21 @@ class MullvadSpeedTest:
             port_speed = f"{result['port_speed']}Gbps" if result['port_speed'] else "Unknown"
             
             # add row to table
+            load_str = f"{result['load']}%" if result['load'] is not None else "-"
             table.add_row(
                 result['hostname'],
                 location,
                 result['ipv4_addr'],
                 f"{result['ping_ms']}ms",
                 port_speed,
+                load_str,
+                result['provider'],
                 str(result['owned']).lower(),
                 features_str
             )
 
-        # print a newline to clear the progress counter
-        self.console.print("\n")
+        # clear the progress line before rendering the table
+        print('\r' + ' ' * 40 + '\r', end='', flush=True)
         # show table
         self.console.print(table)
         
@@ -175,18 +173,19 @@ class MullvadSpeedTest:
                           f"{features_str}")
 
 def main():
-    # how many servers to show (default 10)
     max_results = 10
-    # check if user specified a different number
     if len(sys.argv) > 1:
         try:
             max_results = int(sys.argv[1])
         except ValueError:
             print(f"error: invalid number of servers. using default: {max_results}")
 
-    # create our tester, run the tests, and show the results
     tester = MullvadSpeedTest()
-    results = tester.test_servers(max_results=max_results)
+    try:
+        results = tester.test_servers(max_results=max_results)
+    except Exception as e:
+        tester.console.print(f"[red]error fetching servers: {e}")
+        sys.exit(1)
     tester.display_results(results)
 
 if __name__ == "__main__":
